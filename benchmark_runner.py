@@ -19,7 +19,9 @@ import statistics
 import subprocess
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional
+from vllm_engine import VLLMEngine
 
+engine = VLLMEngine(model_name=config.model_name)
 
 # -----------------------------
 # CONFIG
