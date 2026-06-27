@@ -1,56 +1,20 @@
 import time
-import json
 from queue_manager import QueueManager
-from providers import OpenRouterProvider, HuggingFaceProvider
+from db import DB
+from metrics import Metrics
 from cost_tracker import CostTracker
 
 class Worker:
 
-    def __init__(self, worker_id: str):
+    def __init__(self, worker_id):
 
         self.worker_id = worker_id
         self.queue = QueueManager()
+        self.db = DB()
+        self.metrics = Metrics()
         self.cost = CostTracker()
 
-        self.providers = {
-            "openrouter": OpenRouterProvider(api_key="ENV"),
-            "huggingface": HuggingFaceProvider(api_key="ENV", model="mistralai/Mistral-7B-Instruct")
-        }
-
-    # -------------------------
-    # PROCESS JOB
-    # -------------------------
-
-    def process(self, job):
-
-        provider = self.providers[job["provider"]]
-
-        start = time.time()
-
-        result = provider.run_inference(
-            prompt=job["prompt"],
-            max_tokens=job.get("max_tokens", 256)
-        )
-
-        latency = time.time() - start
-
-        cost = self.cost.estimate(job, result)
-
-        return {
-            "job_id": job["id"],
-            "provider": job["provider"],
-            "latency": latency,
-            "output": result["output"],
-            "cost": cost
-        }
-
-    # -------------------------
-    # RUN LOOP
-    # -------------------------
-
     def run(self):
-
-        print(f"Worker {self.worker_id} started")
 
         while True:
 
@@ -60,19 +24,41 @@ class Worker:
                 time.sleep(1)
                 continue
 
+            start = time.time()
+
             try:
-                result = self.process(job)
+                provider = job["provider"]
 
-                self.queue.push("result_queue", result)
+                # simulate inference call
+                result = {
+                    "output": "response",
+                    "tokens": job["max_tokens"]
+                }
 
-                print(f"Processed job {job['id']}")
+                latency = time.time() - start
+
+                cost = self.cost.estimate(job, result)
+
+                self.db.insert_run(
+                    job["id"],
+                    provider,
+                    latency,
+                    job["max_tokens"],
+                    cost,
+                    True
+                )
+
+                print(f"[OK] {job['id']}")
 
             except Exception as e:
 
-                # retry mechanism
-                job["retries"] = job.get("retries", 0) + 1
+                self.db.insert_run(
+                    job["id"],
+                    job["provider"],
+                    0,
+                    job["max_tokens"],
+                    0,
+                    False
+                )
 
-                if job["retries"] < 3:
-                    self.queue.push("experiment_queue", job)
-
-                print(f"Job failed: {e}")
+                print(f"[FAIL] {e}")
