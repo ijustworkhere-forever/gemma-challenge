@@ -2,9 +2,8 @@
 
 > Living execution plan for the Gemma Challenge.
 >
-> This is not theory — this is the actual order of operations.
->
-> Update continuously as results come in.
+> Current strategy: local-first development, official A10G measurement on
+> Hugging Face Jobs, SQLite experiment tracking.
 
 ---
 
@@ -19,289 +18,216 @@ while maintaining:
 - Valid Perplexity (PPL)
 - Stable outputs
 - Reproducibility
+- Official-run comparability
+
+---
+
+# Runtime Reality
+
+| Environment | Available | Use |
+|---|---:|---|
+| Windows 11 laptop, i9, 64 GB RAM | yes | development, scripts, SQLite |
+| RTX 3050 Ti, 4 GB VRAM | yes | tiny CUDA smoke tests only |
+| Hugging Face ZeroGPU | possible/free | Gradio Space smoke tests |
+| HF Jobs `a10g-small` | paid or org-credit | official benchmark target |
+| AWS Ubuntu host | available | deferred; avoid securing DB/Redis for now |
+
+Only `hf_a10g` results should drive contest optimization decisions.
 
 ---
 
 # Status Overview
 
 | Phase | Status | Notes |
-|------|--------|------|
-| 0. Setup | ⏳ | Repo initialized |
-| 1. Baseline | ⏳ | Not yet measured |
-| 2. Profiling | ⏳ | Not started |
-| 3. Bottleneck Analysis | ⏳ | Pending profiling |
-| 4. Core Optimizations | ⏳ | Pending analysis |
-| 5. Kernel Work | ⏳ | Advanced stage |
-| 6. Submission Tuning | ⏳ | Final stage |
+|---|---|---|
+| 0. Contest alignment | in progress | official HF flow now drives repo |
+| 1. Submission scaffold | in progress | baseline directory added and aligned to official vLLM example |
+| 2. Local experiment ledger | in progress | SQLite utility added |
+| 3. Official baseline | pending | needs HF registration/run command |
+| 4. First optimization pass | pending | wait for measured baseline |
+| 5. Profiling | pending | only after baseline and runner are stable |
+| 6. Final tuning | pending | after repeated official runs |
 
 ---
 
-# PHASE 0 — Setup
+# PHASE 0 - Contest Alignment
 
 ## Objectives
 
-- [x] Create repo structure
-- [x] Add documentation system
-- [ ] Clone baseline inference stack
-- [ ] Confirm GPU environment (A10G)
-- [ ] Validate Gemma model runs
+- [x] Identify official target hardware: HF Jobs `a10g-small`
+- [x] Decide local-first architecture
+- [x] Defer Redis/Postgres/swarm infrastructure
+- [x] Treat ZeroGPU as exploratory, not contest-equivalent
+- [x] Add Gradio ZeroGPU smoke-test scaffold
+- [x] Confirm official org-credit job API
+- [x] Confirm agent id: `ijustworkhere`
+- [ ] Register agent and post intro message
+- [ ] Create scratch bucket and handshake
+
+## Exit Criteria
+
+- Repo docs describe one primary execution path
+- No required hosted services for local iteration
 
 ---
 
-# PHASE 1 — Baseline Establishment
+# PHASE 1 - Baseline Submission
 
 ## Objectives
 
-Establish ground truth metrics.
+Create the simplest valid submission and measure it officially.
 
-### Tasks
+## Tasks
 
-- [ ] Run official benchmark (no modifications)
-- [ ] Record TPS / TTFT / PPL
-- [ ] Capture VRAM usage
-- [ ] Capture GPU utilization
-- [ ] Save Nsight Systems trace
-- [ ] Save Torch profiler trace
-- [ ] Repeat run (3x average)
+- [x] Add `submissions/vllm_baseline/manifest.json`
+- [x] Add `submissions/vllm_baseline/serve.py`
+- [x] Add HF helper scripts
+- [x] Replace placeholder HF job command with official `/v1/jobs:run` call
+- [ ] Upload baseline submission to challenge bucket
+- [ ] Run official A10G benchmark
+- [ ] Save `summary.json`
+- [ ] Log run with `experiment_log.py`
 
-### Outputs
+## Outputs
 
-- baseline.json
-- baseline_trace.qdrep
-- baseline_report.md
+- `summary.json`
+- SQLite experiment row
+- baseline notes in `EXPERIMENTS.md`
 
-### Exit Criteria
+## Exit Criteria
 
-- Stable reproducible benchmark exists
-- Variance < 5%
+- One measured `hf_a10g` baseline exists
+- TPS and PPL are recorded
+- Run can be repeated from documented commands
 
 ---
 
-# PHASE 2 — Profiling
+# PHASE 2 - Local Tooling
 
 ## Objectives
 
-Understand where time is actually spent.
+Make experimentation cheap and organized before spending GPU credits.
 
-### Tasks
+## Tasks
 
-- [ ] Break down pipeline:
-  - tokenizer
-  - prefill
-  - decode loop
-  - attention
-  - KV cache
-  - sampling
-- [ ] Run Nsight Systems
-- [ ] Run Nsight Compute
-- [ ] Generate flame graphs
-- [ ] Identify top 3 bottlenecks
+- [x] Add SQLite experiment ledger
+- [x] Add `.gitignore` entries for generated data/logs
+- [ ] Add dependency manifest
+- [ ] Add validation command for submission directories
+- [ ] Add summary import command for official results
+- [ ] Add README examples for Windows/Git Bash/WSL if needed
 
-### Exit Criteria
+## Exit Criteria
 
-- At least 80% of runtime is attributed
-- Bottleneck ranking established
+- Local commands work without GPU
+- Generated files do not pollute git status
 
 ---
 
-# PHASE 3 — Bottleneck Validation
+# PHASE 3 - Baseline Analysis
 
 ## Objectives
 
-Confirm root causes before optimizing.
+Understand the initial official result before tuning.
 
-### Tasks
+## Tasks
 
-- [ ] Memory-bound vs compute-bound analysis
-- [ ] Kernel launch overhead measurement
-- [ ] CPU vs GPU split
-- [ ] KV cache bandwidth test
-- [ ] Scheduler idle time measurement
+- [ ] Compare TPS against reference/public examples
+- [ ] Confirm PPL is below allowed threshold
+- [ ] Review server startup and steady-state behavior
+- [ ] Identify whether bottleneck is load time, prefill, decode, or overhead
+- [ ] Decide first single-variable experiment
 
-### Exit Criteria
+## Exit Criteria
 
-- One primary bottleneck identified
-- Secondary bottlenecks ranked
+- One bottleneck hypothesis is chosen
+- One controlled experiment is queued
 
 ---
 
-# PHASE 4 — High Impact Optimizations
+# PHASE 4 - Controlled Optimization
 
 ## Objectives
 
-Fix biggest inefficiencies first.
+Improve one variable at a time.
+
+Candidate areas:
+
+- vLLM engine config
+- dtype / quantization options
+- max model length and cache settings
+- CUDA graph compatibility
+- sampling overhead
+- startup/warmup behavior
+- memory utilization
+
+Avoid early focus on:
+
+- distributed serving
+- continuous batching
+- hosted leaderboards
+- multi-provider API research
+
+The official benchmark is single-runner and contest-scored, so batching and
+swarm infrastructure are lower priority until proven relevant.
+
+## Exit Criteria
+
+- Each accepted change has official TPS/PPL evidence
+- Regressions are reverted or archived
 
 ---
 
-## Scheduler Optimization
-
-- [ ] Continuous batching
-- [ ] Request grouping
-- [ ] Decode prioritization tuning
-- [ ] Queue efficiency measurement
-
-Expected gain: 5–15%
-
----
-
-## KV Cache Optimization
-
-- [ ] Layout analysis
-- [ ] Paging vs contiguous comparison
-- [ ] L2 cache hit profiling
-- [ ] Memory bandwidth optimization
-
-Expected gain: 5–20%
-
----
-
-## CUDA Graphs
-
-- [ ] Capture decode graph
-- [ ] Replay execution
-- [ ] Measure launch overhead reduction
-
-Expected gain: 5–10%
-
----
-
-# PHASE 5 — Kernel Optimization
+# PHASE 5 - Profiling
 
 ## Objectives
 
-Push GPU utilization to the limit.
+Profile only after the official baseline is reproducible.
 
-### Tasks
+## Tasks
 
-- [ ] FlashAttention tuning
-- [ ] Triton kernel experiments
-- [ ] CUTLASS GEMM review
-- [ ] RMSNorm fusion
-- [ ] Rotary embedding optimization
-- [ ] Sampling kernel optimization
-
-### Exit Criteria
-
-- SM occupancy > 90%
-- Tensor core utilization maximized
+- [ ] Run Nsight Systems if available in the HF job path
+- [ ] Capture Python/runtime timing if Nsight is unavailable
+- [ ] Separate prefill and decode timing
+- [ ] Measure memory pressure and OOM margin
+- [ ] Record profiling evidence in `EXPERIMENTS.md`
 
 ---
 
-# PHASE 6 — Memory & System Optimization
+# PHASE 6 - Final Submission Tuning
 
 ## Objectives
 
-Remove non-kernel overhead.
+Stabilize the best measured submission.
 
-### Tasks
+## Tasks
 
-- [ ] CPU profiling (tokenizer, runtime)
-- [ ] Async pipeline improvements
-- [ ] Memory allocator tuning
-- [ ] Reduce Python overhead
-- [ ] Eliminate sync points
-
----
-
-# PHASE 7 — Quantization (Optional / Risk-Based)
-
-## Objectives
-
-Trade precision carefully for speed.
-
-### Tasks
-
-- [ ] FP16 baseline confirmation
-- [ ] FP8 testing
-- [ ] INT8 evaluation
-- [ ] Weight-only quantization experiments
-
-### Exit Criteria
-
-- PPL remains within acceptable threshold
-- TPS improves measurably
-
----
-
-# PHASE 8 — Engine Evaluation
-
-## Objectives
-
-Compare full inference stacks.
-
-### Tasks
-
-- [ ] vLLM baseline tuning
-- [ ] TensorRT-LLM benchmark
-- [ ] SGLang comparison
-- [ ] llama.cpp CUDA test (optional)
-
----
-
-# PHASE 9 — Submission Optimization
-
-## Objectives
-
-Polish for leaderboard performance.
-
-### Tasks
-
-- [ ] Final scheduler tuning
-- [ ] Final batching configuration
-- [ ] Warmup optimization
+- [ ] Repeat best run 3x
+- [ ] Confirm PPL margin
 - [ ] Remove debug overhead
-- [ ] Stabilize variance
-- [ ] Final 3-run averaging
-
----
-
-# Performance Targets
-
-| Metric | Target |
-|------|--------|
-| TPS | Maximize |
-| TTFT | Minimize |
-| GPU Utilization | >95% |
-| Variance | <3–5% |
-| PPL | Within threshold |
-
----
-
-# Optimization Philosophy
-
-1. Measure before optimizing
-2. Fix largest bottleneck first
-3. Avoid premature kernel work
-4. Keep experiments isolated
-5. Always preserve correctness
-6. Never trust a single benchmark
+- [ ] Freeze submission directory
+- [ ] Record final config and result provenance
 
 ---
 
 # Current Risks
 
-- Optimizing wrong layer
-- Noise in benchmark results
-- Hidden CPU bottlenecks
-- KV cache misdiagnosis
-- Overfitting to benchmark dataset
-
----
-
-# Open Questions
-
-- What is the true bottleneck at scale?
-- Does decode saturate memory bandwidth or compute?
-- How much is scheduler overhead costing?
-- Can CUDA Graphs be applied safely at scale?
-- Is batching currently optimal?
+- HF auth/token is not configured in this shell yet
+- Installed `hf` CLI is too old for `hf buckets`; upgrade `huggingface_hub`
+- Spending credits before the runner command is correct
+- Drawing conclusions from non-A10G environments
+- Optimizing before baseline evidence exists
+- Breaking PPL while chasing TPS
+- Letting infrastructure work distract from submission performance
 
 ---
 
 # Next Action
 
-👉 Run baseline benchmark  
-👉 Capture full profiler trace  
-👉 Identify first bottleneck  
-
----
+1. Upgrade Hugging Face CLI: `pip install -U huggingface_hub`.
+2. Run `hf auth login` with a token that has `gemma-challenge` write access.
+3. Export `AGENT_ID=ijustworkhere` and `HF_TOKEN`.
+4. Run `scripts/setup_challenge_identity.sh`.
+5. Run `scripts/register_agent.sh`.
+6. Run `scripts/post_message.sh`.
+7. Upload and run `submissions/vllm_baseline`.

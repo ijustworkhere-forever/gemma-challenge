@@ -1,88 +1,102 @@
-# 🧠 Gemma Challenge – Lightweight ML Research Backend
+# Gemma Challenge Architecture
 
-This project is a **single-node, queue-based ML research system** designed to run inference experiments using free LLM APIs (OpenRouter, NVIDIA NIM, HuggingFace).
+This repository is a local-first submission factory for the official Hugging
+Face Gemma Challenge.
 
-It is optimized for:
-- low-cost VPS deployment
-- free-tier LLM APIs
-- small-scale research workloads
+The system is intentionally small until the baseline is measured.
 
----
-
-# 🏗 System Design
-
+```text
+Submission Variant
+  -> HF bucket upload
+  -> HF Jobs official runner on a10g-small
+  -> summary.json
+  -> local SQLite experiment ledger
+  -> next variant decision
 ```
-Controller → Redis Queue → Worker → LLM API → SQLite DB
+
+## Primary Components
+
+## 1. Submission Directories
+
+Each submission lives under `submissions/`.
+
+Current baseline:
+
+```text
+submissions/vllm_baseline/
+  manifest.json
+  serve.py
 ```
 
----
+Copy a submission directory before tuning a new variable. Do not mutate a
+measured baseline in place.
 
-# ⚙️ Components
+## 2. Hugging Face Helper Scripts
 
-## 1. Controller
-Generates experiments and submits them to Redis.
+Scripts under `scripts/` handle local preflight checks, upload, job launch, and
+job inspection.
 
-## 2. Redis Queue
-Handles asynchronous job distribution.
+Required environment:
 
-## 3. Worker
-Executes inference jobs:
-- OpenRouter
-- NVIDIA NIM
-- HuggingFace
+- `HF_AGENT_ID`
+- authenticated Hugging Face CLI session
 
-## 4. SQLite Database
-Stores:
-- experiment metadata
-- results
+Optional environment:
+
+- `HF_TOKEN`
+- `HF_REPO_PREFIX`
+- `HF_RUN_PREFIX`
+
+## 3. Local SQLite Ledger
+
+`experiment_log.py` writes to `data/experiments.sqlite3`.
+
+Tracked fields:
+
+- submission path
+- runtime target
+- HF run URI
+- HF job id
+- TPS
+- PPL
 - latency
-- cost estimates
+- status
+- notes
+- raw `summary.json`
 
----
+SQLite is the default because this is single-user, portable, and easy to back
+up. Postgres can be revisited only after there is real multi-user or hosted
+leaderboard pressure.
 
-# 📊 Metrics Tracked
+## 4. Runtime Targets
 
-- latency per request
-- token usage
-- estimated cost
-- success/failure rate
+| Target | Role | Performance Meaning |
+|---|---|---|
+| `local_cpu` | Packaging and ledger tests | None |
+| `local_3050ti` | Tiny local CUDA smoke tests | Exploratory only |
+| `zerogpu` | Free HF Spaces smoke tests via Gradio | Exploratory only |
+| `hf_a10g` | Official contest benchmark | Contest-comparable |
 
----
+ZeroGPU can be useful for free smoke testing if available, but official
+optimization decisions should be based on `hf_a10g` runs.
 
-# 💰 Cost Model
+For ZeroGPU, create a Gradio Space and use `spaces/zerogpu_smoke/`. Docker and
+Static Spaces are not the intended path for ZeroGPU smoke testing.
 
-Designed for:
-- free-tier APIs
-- minimal VPS usage
-- no GPU required
+## Deferred Components
 
----
+The previous Redis/Postgres/swarm files remain in the repo as prototypes.
+They are deferred because they introduce operational complexity before the
+official contest loop is working.
 
-# 🚀 Deployment
+Deferred until needed:
 
-## Requirements
-- Ubuntu VPS
-- Redis
-- Python 3.10+
+- Redis queue workers
+- hosted Postgres leaderboard
+- multi-provider API swarm
+- autonomous long-running optimizer
 
-## Install
-```bash
-sudo apt install redis python3-pip
-pip install redis requests sqlite3
-```
+## Guiding Rule
 
-## Run
-```bash
-python controller.py
-python worker.py
-```
-
----
-
-# 🧠 Philosophy
-
-This system prioritizes:
-
-> simplicity, observability, and real execution over distributed complexity
-
-It is designed to evolve into a full MLOps system only when resources allow.
+If a change does not help produce, run, compare, or explain an official
+Gemma Challenge submission, it is secondary for now.
