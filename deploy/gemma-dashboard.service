@@ -1,0 +1,14 @@
+[Unit]
+Description=Gemma Research Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gemma-challenge/dashboard
+ExecStart=/usr/bin/streamlit run research_autopilot_dashboard.py --server.port 8501 --server.address 0.0.0.0
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
