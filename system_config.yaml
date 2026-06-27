@@ -1,0 +1,25 @@
+system:
+  mode: single-node
+
+controller:
+  enabled: true
+  loop_delay_sec: 5
+
+swarm:
+  workers: 3
+  providers:
+    - openrouter
+    - huggingface
+    - vertex
+
+leaderboard:
+  persistence: json
+  file: leaderboard.json
+
+marketplace:
+  enabled: true
+  decay_threshold: 0.5
+
+dashboard:
+  enabled: true
+  port: 8501
