@@ -1,0 +1,14 @@
+[Unit]
+Description=Gemma Research Swarm Workers
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gemma-challenge
+ExecStart=/usr/bin/python3 core/distributed_research_swarm.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
