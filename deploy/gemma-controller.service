@@ -1,0 +1,14 @@
+[Unit]
+Description=Gemma Research Controller
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gemma-challenge
+ExecStart=/usr/bin/python3 core/autonomous_research_agent.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
