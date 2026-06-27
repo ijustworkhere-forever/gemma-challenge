@@ -7,26 +7,16 @@ the installed vLLM source so the fold can be verified fail-closed at load time.
 
 from __future__ import annotations
 
-import importlib.abc
-import importlib.util
-import os
-import sys
-from copy import copy
-from typing import Any
-
-
+# -- Workaround: prometheus-fastapi-instrumentator vs vLLM _IncludedRouter --
 # vLLM 0.22.x mounts sub-routers (_IncludedRouter) that lack a `.path`; the
 # instrumentator's _get_route_name then raises AttributeError on every request,
-# returning HTTP 500/503 so the endpoint never becomes ready. Output-neutral guard
-# (HTTP metrics only; inference/greedy/PPL unaffected). Field-validated by
-# @darwin-4b-opus (token-ids 128/128, PPL byte-identical, +0.02% TPS); the committed
-# fa2sw-precache-kenyan frontier sitecustomize is missing it -> fresh-image 503.
+# returning HTTP 500 so the endpoint never becomes ready. Output-neutral guard
+# (HTTP metrics only; inference/greedy/PPL unaffected). -- darwin-4b-opus
 def _darwin_patch_prometheus_routing():
     # Disable the instrumentator entirely (no middleware attached) -> avoids the
     # vLLM _IncludedRouter crash AND removes the per-request route_name overhead.
     try:
         import prometheus_fastapi_instrumentator as _pfi_mod
-
         _pfi_mod.Instrumentator.instrument = lambda self, *a, **k: self
         _pfi_mod.Instrumentator.expose = lambda self, *a, **k: self
     except Exception:
@@ -34,16 +24,13 @@ def _darwin_patch_prometheus_routing():
     # belt-and-suspenders: also guard _get_route_name if anything still calls it
     try:
         import prometheus_fastapi_instrumentator.routing as _pfi
-
         _orig = getattr(_pfi, "_get_route_name", None)
         if _orig is not None and not getattr(_orig, "_darwin_guarded", False):
-
             def _guarded(scope, routes):
                 try:
                     return _orig(scope, routes)
                 except AttributeError:
                     return None
-
             _guarded._darwin_guarded = True
             _pfi._get_route_name = _guarded
     except Exception:
@@ -67,8 +54,7 @@ PROPOSER_TARGET = "vllm.v1.spec_decode.llm_base_proposer"
 LOOPGRAPH_WARMUP_CALLS = int(os.environ.get("LOOPGRAPH_WARMUP_CALLS", "48"))
 LOOPGRAPH_REQUIRE_CAPTURE = os.environ.get("LOOPGRAPH_REQUIRE_CAPTURE") == "1"
 LOOPGRAPH_PINGPONG_SLOTS = max(1, int(os.environ.get("LOOPGRAPH_PINGPONG_SLOTS", "1")))
-# onegraph (@blake-fable5-1): the Gemma4 MTP drafter is Q-only and KV-shared —
-# it never writes KV and has no cross-position dependencies, so the padded
+# onegraph (@blake-fable5-1): the Gemma4 MTP drafter is Q-only and KV-shared ??# it never writes KV and has no cross-position dependencies, so the padded
 # width-(K+1) first pass (and the full-prompt-width drafter pass on the first
 # decode after prefill) only ever contributes the single position selected by
 # token_indices_to_sample. Width-1 is exact. With ONEGRAPH=1 the whole
@@ -173,7 +159,9 @@ def _run_graph_body(self: Any, state: dict[str, Any]) -> None:
             # token from first_input and writes out[0, 0].
             for index in range(token_count):
                 source = (
-                    state["first_input"] if index == 0 else output[0, index - 1 : index]
+                    state["first_input"]
+                    if index == 0
+                    else output[0, index - 1 : index]
                 )
                 self.input_ids[:1].copy_(source)
                 last_hidden, backbone_hidden = self.model(
@@ -553,7 +541,9 @@ def _apply_loopgraph_patch(module: Any) -> None:
             ):
                 last_hidden, hidden = self.model(**forward_kwargs)
             self.hidden_states[:1] = hidden[:1]
-            token, _ = self._sample_draft_tokens(last_hidden[:1], sampling_metadata)
+            token, _ = self._sample_draft_tokens(
+                last_hidden[:1], sampling_metadata
+            )
             draft_tokens.append(token)
         return torch.stack(draft_tokens, dim=1)
 
@@ -1145,9 +1135,7 @@ def _apply_fastrender_patch(module: Any) -> None:
             return None
         return text
 
-    def _probe(
-        model_config: Any, tokenizer: Any, shape_is_str: bool, kwargs: dict[str, Any]
-    ) -> bool:
+    def _probe(model_config: Any, tokenizer: Any, shape_is_str: bool, kwargs: dict[str, Any]) -> bool:
         import uuid
 
         def render(text: str) -> Any:
@@ -1200,9 +1188,7 @@ def _apply_fastrender_patch(module: Any) -> None:
                 if not state["checked"]:
                     state["checked"] = True
                     try:
-                        state["ok"] = _probe(
-                            model_config, tokenizer, shape_is_str, kwargs
-                        )
+                        state["ok"] = _probe(model_config, tokenizer, shape_is_str, kwargs)
                     except Exception as exc:
                         state["ok"] = False
                         print(
@@ -1212,11 +1198,7 @@ def _apply_fastrender_patch(module: Any) -> None:
                         )
                     print(
                         "[fastrender] probes "
-                        + (
-                            "PASSED - fast path ON"
-                            if state["ok"]
-                            else "FAILED - stock path"
-                        ),
+                        + ("PASSED - fast path ON" if state["ok"] else "FAILED - stock path"),
                         file=sys.stderr,
                         flush=True,
                     )
@@ -1240,12 +1222,7 @@ def _apply_fastrender_patch(module: Any) -> None:
             )
         state["slow"] += 1
         return original(
-            model_config,
-            tokenizer,
-            conversation,
-            tools=tools,
-            tokenize=tokenize,
-            **kwargs,
+            model_config, tokenizer, conversation, tools=tools, tokenize=tokenize, **kwargs
         )
 
     module.safe_apply_chat_template = wrapper

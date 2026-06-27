@@ -1024,6 +1024,11 @@ def main() -> None:
         # "server exited before readiness" check immediately.
         import serve_patch_precache  # noqa: F401
         print("[serve] precache patch import validated", flush=True)
+
+    if os.environ.get("WARMUP_BRIDGE") == "1":
+        import serve_patch_warmup_bridge  # noqa: F401
+        print("[serve] warmup bridge import validated", flush=True)
+
     print("[serve] launching:", " ".join(args), flush=True)
     os.execvpe(args[0], args, os.environ)
 

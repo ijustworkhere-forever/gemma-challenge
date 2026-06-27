@@ -1,6 +1,6 @@
 {
-  "name": "w192-int4-mtp",
-  "description": "INT4 osoi5-v0-baked + kenyan-duma MTP K=7 + W192 sliding window + loopgraph CUDA graph + fused sparse argmax + PLE scale-fold + SMP-02 slim-greedy + PCK04 16k->12k lm_head prune. Based on chiku-inu osoi5-skv64-ctk48 stack with W192 override.",
+  "name": "rusho-v8-no-w128-ctk30-splitkv-warmup",
+  "description": "rusho v8 stack (splitkv-verify 4x verify-attn speedup + warmup-bridge + CTK=30) WITHOUT W128 sliding window. Targeting ~515+ TPS within PPL budget.",
   "dependencies": [
     "https://wheels.vllm.ai/3e8afdf78598afc8be999a6a049be3a5fe182e48/vllm-0.22.1rc1.dev307%2Bg3e8afdf78.cu129-cp38-abi3-manylinux_2_28_x86_64.whl",
     "transformers==5.9.0",
@@ -8,7 +8,8 @@
     "MarkupSafe==3.0.3",
     "orjson==3.10.18",
     "safetensors",
-    "torch"
+    "torch",
+    "prometheus-fastapi-instrumentator==7.1.0"
   ],
   "model_id": "google/gemma-4-E4B-it",
   "served_model_name": "gemma-4-e4b-it",
@@ -27,9 +28,7 @@
     "LM_HEAD_PRUNE_DST": "/tmp/osoi5-12k-baked",
     "LM_HEAD_KEEPSET_BUCKET": "hf://buckets/gemma-challenge/gemma-dixie-flatline/weights/int4-pck04c-12k",
     "PCK04_KEEPSET": "/tmp/osoi5-v0-baked/pck04_keepset.json",
-    "CENTROID_TOP_K": "48",
-    "HF_OVERRIDES": "{\"text_config\": {\"sliding_window\": 192}}",
-    "SLIDING_WINDOW": "192",
+    "CENTROID_TOP_K": "30",
     "SPECULATIVE_CONFIG": "{\"method\":\"mtp\",\"model\":\"/tmp/qat-assistant\",\"num_speculative_tokens\":7}",
     "GENERATION_CONFIG": "vllm",
     "OVERRIDE_GENERATION_CONFIG": "{\"temperature\":0.0,\"top_p\":1.0,\"top_k\":0}",
@@ -57,6 +56,13 @@
     "ONEGRAPH": "1",
     "FA_SLIDING": "1",
     "FA_SLIDING_DIAG": "0",
+    "SPLITKV_VERIFY": "1",
+    "SPLITKV_VERIFY_MAX_Q": "64",
+    "WARMUP_BRIDGE": "1",
+    "WARMUP_NUM_PROMPTS": "64",
+    "WARMUP_MAX_TOKENS": "1",
+    "WARMUP_SEED": "42",
+    "WARMUP_REQUIRE": "0",
     "DETOK_ENDONLY": "1",
     "FASTRENDER": "1",
     "FEOPT_ORJSON": "1",
