@@ -1,0 +1,14 @@
+[Unit]
+Description=Gemma Leaderboard Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gemma-challenge
+ExecStart=/usr/bin/python3 core/swarm_leaderboard_server.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
