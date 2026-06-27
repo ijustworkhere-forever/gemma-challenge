@@ -1,417 +1,159 @@
-# ARCHITECTURE.md
+# 🧠 Gemma Challenge — Autonomous ML Research Backend
 
-> High-level system design of the Gemma inference pipeline.
->
-> This document explains:
->
-> - How inference actually flows
-> - Where compute happens
-> - Where memory bottlenecks appear
-> - Where optimization opportunities exist
+A distributed, queue-based ML research system for running, evaluating, and evolving LLM inference experiments across multiple providers (OpenRouter, HuggingFace, Vertex AI).
 
 ---
 
-# 1. System Overview
+# 🚀 Overview
 
-The inference stack can be broken into 5 major stages:
+This system is a lightweight **ML research backend** designed to:
+
+- Generate inference experiments automatically
+- Execute experiments via distributed workers
+- Benchmark LLM performance across providers
+- Track cost, latency, and throughput
+- Evolve experiment strategies over time
+
+It is inspired by:
+- internal ML evaluation systems
+- distributed inference platforms
+- research automation pipelines
+
+---
+
+# 🏗 Architecture
+
+## System Flow
 
 ```
-Request
-  ↓
-Tokenizer (CPU)
-  ↓
-Prefill (GPU)
-  ↓
-KV Cache Write/Read (GPU Memory)
-  ↓
-Decode Loop (GPU)
-  ↓
-Sampling + Post-processing (CPU/GPU hybrid)
-  ↓
-Streaming Output
+Controller → Redis Queue → Workers → Providers → Result Queue → Evaluator → Meta Optimizer
 ```
 
 ---
 
-# 2. End-to-End Pipeline
+## Core Components
 
-## 2.1 Request Layer
+### 1. Controller
+Generates experiments and submits jobs to the queue.
 
-Responsible for:
+### 2. Redis Queue
+Provides durable, retry-safe job distribution.
 
-- Receiving input prompts
-- Managing concurrent requests
-- Queueing / scheduling
-- Batching decisions
-
-### Key Characteristics
-
-- CPU-bound under high concurrency
-- Highly sensitive to scheduling strategy
-- Direct impact on GPU utilization
-
-### Optimization Targets
-
-- Scheduler efficiency
-- Queue latency
-- Batch formation strategy
+Queues:
+- `experiment_queue`
+- `result_queue`
 
 ---
 
-## 2.2 Tokenization (CPU)
+### 3. Workers
+Stateless execution nodes that:
 
-Responsible for:
-
-- Converting text → token IDs
-
-### Bottlenecks
-
-- Python overhead
-- Single-thread execution
-- GIL contention
-
-### Optimization Opportunities
-
-- Parallel tokenization
-- Rust/C++ tokenizer backend
-- Pre-tokenization caching
+- Pull jobs from queue
+- Run inference via:
+  - OpenRouter
+  - HuggingFace
+  - Vertex AI
+- Return normalized results
 
 ---
 
-## 2.3 Prefill Phase (GPU)
+### 4. Cost Tracker
+Tracks:
 
-Responsible for:
-
-- Processing full prompt
-- Building initial KV cache
-- Running full attention over sequence
-
-```
-Prompt Tokens → Transformer Layers → KV Cache
-```
-
-### Characteristics
-
-- Compute-heavy
-- High memory bandwidth usage
-- Often long-running compared to decode
-
-### Bottlenecks
-
-- Attention kernel efficiency
-- Memory bandwidth saturation
-- Large matrix multiplications
-
-### Optimization Opportunities
-
-- FlashAttention tuning
-- Kernel fusion
-- Tensor core utilization
-- Sequence packing
+- token usage
+- provider cost per request
+- total experiment cost
 
 ---
 
-## 2.4 KV Cache System
+### 5. Autoscaler
+Simple queue-depth-based scaling:
 
-This is one of the most critical subsystems.
-
-Responsible for:
-
-- Storing key/value tensors per layer
-- Reusing computation across decode steps
-
-```
-Layer Output → KV Cache → Next Token Attention
-```
-
-### Characteristics
-
-- Memory bandwidth bound
-- Highly sensitive to layout
-- Fragmentation affects performance
-
-### Bottlenecks
-
-- Non-contiguous memory access
-- Cache paging inefficiency
-- L2 cache misses
-- Allocation overhead
-
-### Optimization Opportunities
-
-- PagedAttention improvements
-- Cache layout redesign (contiguous vs paged)
-- FP8 / compressed KV cache
-- Better memory reuse strategy
+- scales workers up when backlog increases
+- remains idle when system is stable
 
 ---
 
-## 2.5 Decode Loop (GPU)
+### 6. Meta Optimizer (future layer)
+Learns from historical results to:
 
-This is the critical throughput stage.
-
-Runs repeatedly for each generated token:
-
-```
-For each token:
-    Attention(KV Cache)
-    MLP
-    LayerNorm
-    Update KV Cache
-```
-
-### Characteristics
-
-- Latency sensitive
-- Repeated execution (dominates runtime)
-- Kernel launch overhead matters
-
-### Bottlenecks
-
-- Kernel launch overhead
-- Inefficient scheduling
-- Small batch inefficiency
-- Memory stalls
-
-### Optimization Opportunities
-
-- CUDA Graphs (huge win potential)
-- Kernel fusion
-- Continuous batching
-- Tensor core optimization
-- Reduced launch frequency
+- improve experiment selection
+- prune low-value strategies
+- optimize system performance
 
 ---
 
-## 2.6 Sampling (CPU/GPU hybrid)
+# ⚙️ Deployment (VPS)
 
-Responsible for:
+## Requirements
 
-- Selecting next token
-- Applying:
-  - Top-K
-  - Top-P
-  - Temperature scaling
+- Ubuntu VPS
+- Python 3.10+
+- Redis server
 
-### Characteristics
+## Install
 
-- CPU-heavy in many stacks
-- Often overlooked bottleneck
-- Happens every token
-
-### Bottlenecks
-
-- Python overhead
-- CPU-GPU synchronization
-- Unfused operations
-
-### Optimization Opportunities
-
-- Move sampling to GPU
-- Fuse sampling kernel
-- Vectorized top-k/top-p
-- Eliminate CPU round trips
-
----
-
-## 2.7 Output Streaming
-
-Responsible for:
-
-- Sending tokens to client
-- Managing partial responses
-
-### Characteristics
-
-- Network + CPU bound
-- Can introduce stalls if blocking
-
-### Optimization Opportunities
-
-- Async streaming
-- Buffering strategies
-- Non-blocking IO
-
----
-
-# 3. Full Execution Timeline
-
+```bash
+sudo apt update
+sudo apt install redis python3-pip -y
+pip install redis requests
 ```
-TIME →
-│
-│ Request arrives
-│
-├── Tokenization (CPU)
-│
-├── Prefill (GPU heavy compute burst)
-│
-├── KV cache initialized
-│
-├── Decode loop starts
-│     ├── Attention
-│     ├── MLP
-│     ├── Sampling
-│     └── KV update
-│     (repeats per token)
-│
-└── Output streaming
+
+## Run system
+
+```bash
+python controller.py
+python worker.py
+python autoscaler.py
 ```
 
 ---
 
-# 4. Performance Hotspots (Expected)
+# 📊 Features
 
-Ranked by likely impact:
+## ✔ Distributed Execution
+Workers operate independently and scale horizontally.
 
-## #1 Decode Loop
+## ✔ Multi-Provider Benchmarking
+Supports:
+- OpenRouter
+- HuggingFace
+- Vertex AI
 
-- Dominates total runtime
-- Repeats per token
-- Sensitive to every micro-optimization
+## ✔ Fault Tolerance
+- Retry mechanism (max 3 attempts)
+- Queue persistence
 
-## #2 KV Cache
+## ✔ Cost Awareness
+Every experiment tracks estimated API cost.
 
-- Memory bandwidth bottleneck
-- Layout determines performance ceiling
-
-## #3 Scheduler
-
-- Controls GPU utilization
-- Can cause idle GPU time
-
-## #4 Prefill
-
-- Heavy compute burst
-- Important but less dominant than decode
-
-## #5 Sampling
-
-- Often underestimated
-- Can become CPU bottleneck
+## ✔ Scalable Architecture
+Queue-based system allows multiple workers per VPS.
 
 ---
 
-# 5. Bottleneck Classification Guide
+# 🔁 Future Extensions
 
-Use this to interpret profiler results:
+Planned upgrades:
 
-| Symptom | Likely Cause |
-|----------|-------------|
-| Low GPU usage | Scheduler issue |
-| High memory bandwidth | KV cache / attention |
-| High kernel launch count | Decode inefficiency |
-| High CPU usage | Tokenizer / sampling |
-| Long TTFT | Prefill inefficiency |
-| Poor TPS scaling | Decode bottleneck |
+- Postgres / ClickHouse result storage
+- Web dashboard (Streamlit or Next.js)
+- Multi-node worker clusters
+- Kubernetes deployment option
+- Advanced experiment RL selection policy
 
 ---
 
-# 6. Optimization Levers Map
+# 🧠 Concept
 
-## Scheduler Layer
+This system behaves like a:
 
-- Continuous batching
-- Request ordering
-- Queue management
+> lightweight internal ML research platform for LLM inference optimization
 
 ---
 
-## Compute Layer
+# ⚠️ Notes
 
-- FlashAttention tuning
-- Kernel fusion
-- Triton kernels
-- TensorRT-LLM optimizations
-
----
-
-## Memory Layer
-
-- KV cache layout
-- Paging strategy
-- Allocation optimization
-- Memory reuse
-
----
-
-## Execution Layer
-
-- CUDA Graphs
-- Async execution
-- Stream overlap
-
----
-
-## Sampling Layer
-
-- GPU sampling kernels
-- Fused top-k/top-p
-- Reduced synchronization
-
----
-
-# 7. Key Insight
-
-Most TPS improvements do NOT come from faster math.
-
-They come from:
-
-- fewer kernel launches
-- better memory locality
-- better scheduling
-- fewer CPU/GPU sync points
-
----
-
-# 8. Mental Model
-
-Think of the system as:
-
-```
-GPU = expensive compute engine
-
-CPU = traffic controller
-
-KV Cache = memory highway
-
-Scheduler = traffic lights
-
-Decode loop = main workload loop
-```
-
-If any layer is inefficient, the entire system slows down.
-
----
-
-# 9. Optimization Strategy Reminder
-
-Before changing anything:
-
-1. Identify bottleneck layer
-2. Confirm with profiler
-3. Change ONE variable
-4. Measure again
-5. Keep or revert
-
----
-
-# 10. Current Unknowns
-
-These are critical unanswered questions:
-
-- What dominates decode time: compute or memory?
-- Is scheduler causing GPU underutilization?
-- How expensive is KV cache access per token?
-- Is sampling visible in runtime profile?
-- Where does kernel launch overhead peak?
-
----
-
-# 11. Next Step
-
-👉 Run baseline benchmark  
-👉 Capture full Nsight trace  
-👉 Map real runtime to this architecture  
-👉 Identify first optimization target  
-
----
+- Not a production-grade distributed system yet
+- Designed for experimentation + research workflows
+- Optimized for simplicity on a single VPS
