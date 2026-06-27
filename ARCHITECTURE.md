@@ -1,159 +1,88 @@
-# 🧠 Gemma Challenge — Autonomous ML Research Backend
+# 🧠 Gemma Challenge – Lightweight ML Research Backend
 
-A distributed, queue-based ML research system for running, evaluating, and evolving LLM inference experiments across multiple providers (OpenRouter, HuggingFace, Vertex AI).
+This project is a **single-node, queue-based ML research system** designed to run inference experiments using free LLM APIs (OpenRouter, NVIDIA NIM, HuggingFace).
 
----
-
-# 🚀 Overview
-
-This system is a lightweight **ML research backend** designed to:
-
-- Generate inference experiments automatically
-- Execute experiments via distributed workers
-- Benchmark LLM performance across providers
-- Track cost, latency, and throughput
-- Evolve experiment strategies over time
-
-It is inspired by:
-- internal ML evaluation systems
-- distributed inference platforms
-- research automation pipelines
+It is optimized for:
+- low-cost VPS deployment
+- free-tier LLM APIs
+- small-scale research workloads
 
 ---
 
-# 🏗 Architecture
-
-## System Flow
+# 🏗 System Design
 
 ```
-Controller → Redis Queue → Workers → Providers → Result Queue → Evaluator → Meta Optimizer
+Controller → Redis Queue → Worker → LLM API → SQLite DB
 ```
 
 ---
 
-## Core Components
+# ⚙️ Components
 
-### 1. Controller
-Generates experiments and submits jobs to the queue.
+## 1. Controller
+Generates experiments and submits them to Redis.
 
-### 2. Redis Queue
-Provides durable, retry-safe job distribution.
+## 2. Redis Queue
+Handles asynchronous job distribution.
 
-Queues:
-- `experiment_queue`
-- `result_queue`
+## 3. Worker
+Executes inference jobs:
+- OpenRouter
+- NVIDIA NIM
+- HuggingFace
 
----
-
-### 3. Workers
-Stateless execution nodes that:
-
-- Pull jobs from queue
-- Run inference via:
-  - OpenRouter
-  - HuggingFace
-  - Vertex AI
-- Return normalized results
+## 4. SQLite Database
+Stores:
+- experiment metadata
+- results
+- latency
+- cost estimates
 
 ---
 
-### 4. Cost Tracker
-Tracks:
+# 📊 Metrics Tracked
 
+- latency per request
 - token usage
-- provider cost per request
-- total experiment cost
+- estimated cost
+- success/failure rate
 
 ---
 
-### 5. Autoscaler
-Simple queue-depth-based scaling:
+# 💰 Cost Model
 
-- scales workers up when backlog increases
-- remains idle when system is stable
-
----
-
-### 6. Meta Optimizer (future layer)
-Learns from historical results to:
-
-- improve experiment selection
-- prune low-value strategies
-- optimize system performance
+Designed for:
+- free-tier APIs
+- minimal VPS usage
+- no GPU required
 
 ---
 
-# ⚙️ Deployment (VPS)
+# 🚀 Deployment
 
 ## Requirements
-
 - Ubuntu VPS
+- Redis
 - Python 3.10+
-- Redis server
 
 ## Install
-
 ```bash
-sudo apt update
-sudo apt install redis python3-pip -y
-pip install redis requests
+sudo apt install redis python3-pip
+pip install redis requests sqlite3
 ```
 
-## Run system
-
+## Run
 ```bash
 python controller.py
 python worker.py
-python autoscaler.py
 ```
 
 ---
 
-# 📊 Features
+# 🧠 Philosophy
 
-## ✔ Distributed Execution
-Workers operate independently and scale horizontally.
+This system prioritizes:
 
-## ✔ Multi-Provider Benchmarking
-Supports:
-- OpenRouter
-- HuggingFace
-- Vertex AI
+> simplicity, observability, and real execution over distributed complexity
 
-## ✔ Fault Tolerance
-- Retry mechanism (max 3 attempts)
-- Queue persistence
-
-## ✔ Cost Awareness
-Every experiment tracks estimated API cost.
-
-## ✔ Scalable Architecture
-Queue-based system allows multiple workers per VPS.
-
----
-
-# 🔁 Future Extensions
-
-Planned upgrades:
-
-- Postgres / ClickHouse result storage
-- Web dashboard (Streamlit or Next.js)
-- Multi-node worker clusters
-- Kubernetes deployment option
-- Advanced experiment RL selection policy
-
----
-
-# 🧠 Concept
-
-This system behaves like a:
-
-> lightweight internal ML research platform for LLM inference optimization
-
----
-
-# ⚠️ Notes
-
-- Not a production-grade distributed system yet
-- Designed for experimentation + research workflows
-- Optimized for simplicity on a single VPS
+It is designed to evolve into a full MLOps system only when resources allow.
